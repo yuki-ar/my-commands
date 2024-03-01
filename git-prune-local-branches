@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# 安全なデフォルトブランチと追加のブランチを設定
+safe_branch="develop"
+additional_branches=("phase4" "phase5")
+
+# スクリプトが途中で失敗した場合に停止する
+set -eu
+
+# リモートリポジトリから全てのブランチの最新情報を取得
+git fetch --all
+
+# 現在のブランチを保存
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# 削除されたブランチ名を保持する配列
+deleted_branches=()
+
+delete_merged_branches() {
+  branch=$1
+  git switch "$branch"
+  exclude_branches_pattern="\*|$safe_branch|main"
+  for exclude_branch in "${additional_branches[@]}"; do
+      exclude_branches_pattern+="|$exclude_branch"
+  done
+  git branch --merged | grep -vE "$exclude_branches_pattern" | while read -r b; do
+    if git branch -d "$b"; then
+      # shellcheck disable=SC2030
+      deleted_branches+=("$b")
+    else
+      echo "ブランチ '$b' を削除できませんでした。"
+    fi
+  done
+}
+
+check_and_delete_branches() {
+  for branch in "$safe_branch" "${additional_branches[@]}"; do
+    if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+      echo "$branch ブランチにマージ済みブランチを削除します。よろしいですか？ [y/N]"
+      read -r confirm
+      if [[ $confirm =~ ^[Yy]$ ]]; then
+        delete_merged_branches "$branch"
+      else
+        echo "$branch ブランチの削除をスキップします。"
+      fi
+    else
+      echo "$branch ブランチがリモートに存在しません。"
+    fi
+  done
+}
+
+# マージ済みブランチを削除
+check_and_delete_branches
+
+# 削除されたブランチの一覧を出力
+# shellcheck disable=SC2031
+if [ ${#deleted_branches[@]} -ne 0 ]; then
+  echo "削除されたブランチ:"
+  for branch in "${deleted_branches[@]}"; do
+    echo "$branch"
+  done
+else
+  echo "削除されたブランチはありません。"
+fi
+
+# 元のブランチに戻る
+if git show-ref --verify --quiet "refs/heads/$current_branch"; then
+  git switch "$current_branch"
+else
+  echo "\"$current_branch\"ブランチは削除されました。\"$safe_branch\"ブランチに戻ります。"
+  git switch "$safe_branch"
+fi
+
