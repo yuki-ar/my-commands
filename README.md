@@ -17,3 +17,6 @@ phase5 ブランチがリモートに存在しません。
 Already on 'phase4'
 Your branch is up to date with 'origin/phase4'.
 ```
+
+## WIP grgen
+QRコードを生成するコマンド
